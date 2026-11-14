@@ -1,0 +1,115 @@
+data:
+  cache_dir: outputs/flowers/dataset_cache
+  caption_column: captions
+  caption_selection: random_detailed
+  allow_identical_images: 1
+  dataset_format: huggingface
+  dataset_id: kaiyuyue/oxford-flowers-102-captions
+  dataset_revision: main
+  id_column: image_id
+  image_channels: 3
+  image_column: image
+  image_size: 64
+  num_workers: 4
+  streaming: false
+  test_split: val
+  test_subset_size: 1020
+  train_split: train
+  train_subset_size: 7169
+discriminator:
+  activation: leaky_relu
+  batch_norm_final_output: false
+  batch_norm_first_image_block: false
+  batch_norm_image: false
+  batch_norm_joint: false
+  feature_size: 4
+  image_channel_schedule:
+  - 3
+  - 64
+  - 128
+  - 256
+  - 512
+  image_channels: 3
+  image_kernel_size: 4
+  image_padding: 1
+  image_size: 64
+  image_stride: 2
+  joint_channels:
+  - 512
+  - 1
+  joint_kernel_sizes:
+  - 3
+  - 4
+  joint_paddings:
+  - 1
+  - 0
+  joint_strides:
+  - 1
+  - 1
+  negative_slope: 0.2
+  text_dim: 256
+evaluation:
+  batch_size: 32
+  clip_model_name: openai/clip-vit-base-patch32
+  historical_reported_similarity: 0.2556
+  seed: 42
+  text_max_length: null
+  text_padding: true
+  text_truncation: true
+generator:
+  batch_norm: true
+  channel_schedule:
+  - 512
+  - 256
+  - 128
+  - 64
+  - 3
+  conditioning_augmentation: true
+  word_level_attention: true
+  hidden_activation: relu
+  initial_channels: 512
+  initial_size: 4
+  noise_dim: 100
+  output_activation: tanh
+  output_batch_norm: false
+  text_dim: 256
+paths:
+  checkpoint_dir: outputs/flowers/word_attention_clip/checkpoints
+  losses_plot: outputs/flowers/word_attention_clip/training_losses.png
+  output_dir: outputs/flowers/word_attention_clip
+  samples_dir: outputs/flowers/word_attention_clip/samples
+reproducibility:
+  seed: 42
+text_encoder:
+  freeze_text_encoder: true
+  max_length: 32
+  model_name: bert-base-uncased
+  output_dim: 256
+training:
+  adam_betas:
+  - 0.5
+  - 0.999
+  batch_size: 32
+  checkpoint_interval_epochs: 5
+  conditioning_kl_weight: 0.02
+  clip_alignment_weight: 0.1
+  clip_alignment_model_name: openai/clip-vit-base-patch32
+  clip_alignment_temperature: 0.07
+  discriminator_lr: 5.0e-05
+  drop_last: false
+  epochs: 20
+  fake_label: 0.0
+  generator_lr: 0.00015
+  generator_target_label: 1.0
+  generator_updates_per_discriminator_update: 2
+  gradient_clip_norm: 1.0
+  image_noise_sigma: 0.05
+  matching_aware_discriminator: true
+  mismatched_caption_weight: 1.0
+  noise_on_generator_updates: false
+  real_label: 0.9
+  resume_from: null
+  sample_grid_interval_epochs: 1
+  sample_grid_size: 16
+  scheduler_gamma: 0.5
+  scheduler_step_size: 10

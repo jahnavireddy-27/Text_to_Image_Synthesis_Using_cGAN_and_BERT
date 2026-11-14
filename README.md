@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Text-to-Image Synthesis Using GANs and BERT-Based Text Encoding
 
 This repository is a modular reconstruction from the project specification. The
@@ -175,3 +176,6 @@ The text-encoder test injects a mock tokenizer and BERT module, verifies frozen
 BERT weights and the trainable projection, and does not download pretrained
 weights. The model tests use synthetic tensors. No training or dataset download
 is started by the tests.
+=======
+# Text_to_Image_Synthesis_Using_cGAN_and_BERT
+>>>>>>> daaf6f1dcf2d70d80b58c64862fd97c1c22cd09c
