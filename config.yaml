@@ -1,0 +1,129 @@
+# Dataset configuration
+data:
+  dataset_format: webdataset
+  dataset_id: jackyhue/text-to-image-2M
+  dataset_revision: d6e16ffc2d9051fa91c08b4ebca82554287c28f3
+
+  # WebDataset streaming
+  streaming: true
+  source_split: train
+  train_split: train
+  test_split: test
+
+ 
+  shard_count: 47
+  shard_url_template: "https://huggingface.co/datasets/jackyhue/text-to-image-2M/resolve/d6e16ffc2d9051fa91c08b4ebca82554287c28f3/data_512_2M/data_{i:06d}.tar"
+
+  # WebDataset fields
+  image_column: jpg
+  caption_column: json.caption
+  id_column: __key__
+
+  # Selected subset
+  train_subset_size: 10000
+  test_subset_size: 2000
+  image_size: 64
+  image_channels: 3
+  caption_selection: first
+  allow_identical_images: 0
+
+  # Streaming and caching
+  cache_dir: outputs/selected_dataset_cache
+  partition_seed: 42
+  streaming_shuffle_buffer_size: 10000
+  streaming_max_buffer_input_shards: 47
+  streaming_duplicate_skip_limit: 5000
+  num_workers: 0
+
+# Text encoder
+text_encoder:
+  model_name: bert-base-uncased
+  output_dim: 256
+  max_length: 32
+  freeze_text_encoder: true
+
+# Generator
+generator:
+  text_dim: 256
+  noise_dim: 100
+  initial_channels: 512
+  initial_size: 4
+  channel_schedule: [512, 256, 128, 64, 3]
+  batch_norm: true
+  output_batch_norm: false
+  hidden_activation: relu
+  output_activation: tanh
+  conditioning_augmentation: true
+  word_level_attention: true
+
+# Discriminator
+discriminator:
+  image_channels: 3
+  image_size: 64
+  text_dim: 256
+  feature_size: 4
+  image_channel_schedule: [3, 64, 128, 256, 512]
+  image_kernel_size: 4
+  image_stride: 2
+  image_padding: 1
+  joint_channels: [512, 1]
+  joint_kernel_sizes: [3, 4]
+  joint_strides: [1, 1]
+  joint_paddings: [1, 0]
+  activation: leaky_relu
+  negative_slope: 0.2
+  batch_norm_image: false
+  batch_norm_joint: false
+  batch_norm_first_image_block: false
+  batch_norm_final_output: false
+
+# Training
+training:
+  epochs: 20
+  batch_size: 32
+  generator_lr: 0.00015
+  discriminator_lr: 0.00005
+  adam_betas: [0.5, 0.999]
+  generator_updates_per_discriminator_update: 2
+  real_label: 0.9
+  fake_label: 0.0
+  generator_target_label: 1.0
+  gradient_clip_norm: 1.0
+  image_noise_sigma: 0.05
+  noise_on_generator_updates: false
+  matching_aware_discriminator: true
+  mismatched_caption_weight: 1.0
+  conditioning_kl_weight: 0.02
+
+  # Optional CLIP training guidance
+  clip_alignment_weight: 0.1
+  clip_alignment_model_name: openai/clip-vit-base-patch32
+  clip_alignment_temperature: 0.07
+
+  scheduler_step_size: 10
+  scheduler_gamma: 0.5
+  checkpoint_interval_epochs: 5
+  sample_grid_interval_epochs: 1
+  sample_grid_size: 16
+  drop_last: false
+  resume_from: null
+
+# Evaluation
+evaluation:
+  batch_size: 32
+  clip_model_name: openai/clip-vit-base-patch32
+  text_padding: true
+  text_truncation: true
+  text_max_length: null
+  seed: 42
+
+# Reproducibility
+reproducibility:
+  seed: 42
+
+# Output paths
+paths:
+  output_dir: outputs/text_to_image_gan
+  checkpoint_dir: outputs/text_to_image_gan/checkpoints
+  samples_dir: outputs/text_to_image_gan/samples
+  losses_plot: outputs/text_to_image_gan/training_losses.png
