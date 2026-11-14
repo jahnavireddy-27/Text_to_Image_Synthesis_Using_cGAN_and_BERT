@@ -1,181 +1,228 @@
-<<<<<<< HEAD
-# Text-to-Image Synthesis Using GANs and BERT-Based Text Encoding
+# BERT-Conditioned Text-to-Image Synthesis Using Conditional GANs
 
-This repository is a modular reconstruction from the project specification. The
-original source code is unavailable, so choices not fixed by the report are
-identified as reconstruction defaults rather than claims about the original
-implementation.
+A PyTorch implementation of text-to-image synthesis using a BERT-based text encoder and a conditional Generative Adversarial Network (cGAN). The project explores how natural-language descriptions can condition a generator to produce corresponding images.
 
-## What is report-confirmed
+## Project Overview
 
-- Python, PyTorch, Hugging Face Transformers, pretrained `bert-base-uncased`,
-  Torchvision, and CLIP ViT-B/32 for evaluation.
-- Tokenized captions with padding/truncation, maximum length 32, BERT pooler
-  output, and a 768-to-256 projection.
-- A generator conditioned on the 256-dimensional text vector and 100-dimensional
-  noise, projected to 512 x 4 x 4 and upsampled to 64 x 64 RGB with BatchNorm,
-  ReLU, and Tanh.
-- A discriminator with four image convolution blocks, image channels
-  3 -> 64 -> 128 -> 256 -> 512, a 4 x 4 final image feature map, expanded
-  256-dimensional text features, and a joint image/text head.
-- BCE training, Adam, generator/discriminator learning rates 1.5e-4/5e-5,
-  betas (0.5, 0.999), batch size 32, real label 0.9, image noise sigma 0.05,
-  gradient clipping at 1.0, two generator updates per discriminator update,
-  StepLR halving every 10 epochs, and checkpoints every 5 epochs.
-- The experiment sizes listed in the report: 10,000 training examples and 2,000
-  test examples. These are selected subsets; the whole 2M-example dataset is not
-  treated as the training set. `drop_last` is disabled so the final partial
-  training batch is included.
-- 64 x 64 images normalized to [-1, 1], image-caption pairs, generated samples,
-  loss plots, and CLIP image/text cosine similarity. The historical score 0.2556
-  is stored only as a reference, never as an expected test threshold.
+This project implements a text-conditioned image-generation pipeline. A pretrained BERT model converts captions into semantic representations, which are projected into a lower-dimensional embedding space and supplied to the GAN.
 
-The active experiment now uses Oxford Flowers 102 to keep the image domain
-focused. This is a deliberate dataset change from the original report's broad
-2M-source sample, so its reported 10,000/2,000 split sizes do not describe the
-current flower run.
+The generator combines text embeddings with random noise to synthesize images. The discriminator evaluates images jointly with their corresponding text representations to distinguish real image-caption pairs from generated or mismatched pairs.
 
-The flower experiment now adds two explicit text-to-image improvements beyond
-the report reconstruction: token-level BERT conditioning and a frozen CLIP
-image-text alignment loss. BERT sentence features still provide the global
-condition; BERT token features guide generator locations through attention at
-4x4, 8x8, 16x16, and 32x32 feature resolutions. During generator updates, a
-frozen CLIP model supplies a symmetric in-batch image-text contrastive loss.
-CLIP's parameters are not optimized; gradients pass through its image encoder
-to the generated pixels. These additions are a new experiment and are not yet
-evidence that image quality has improved.
+The implementation also includes optional attention, conditioning augmentation, and CLIP-based guidance.
 
-## Reconstruction defaults and assumptions
+## Architecture
 
-The report does not determine every implementation detail. This project makes
-the following choices explicit and configurable in `config.yaml`:
+### 1. Text Encoder
+- Uses `bert-base-uncased` from Hugging Face Transformers.
+- Extracts pooled sentence representations from BERT.
+- Projects the 768-dimensional BERT representation into a 256-dimensional conditioning vector.
+- Supports frozen BERT weights by default, with a trainable projection layer.
+- Optionally exposes contextual token features for word-level attention.
 
-- BERT weights are frozen by default (`freeze_text_encoder: true`); the
-  sentence and token projections remain trainable. Set the flag to `false` to
-  fine-tune BERT.
-- Generator channels are 512 -> 256 -> 128 -> 64 -> 3 over four
-  stride-2, 4 x 4 transposed convolutions. Hidden activation is ReLU and output
-  activation is Tanh. Generator output BatchNorm is disabled by default.
-- Discriminator image blocks use stride-2, 4 x 4 convolutions. Image-block
-  BatchNorm is enabled except in the first block. The joint head is
-  768 x 4 x 4 -> 512 x 4 x 4 -> 1 x 1 x 1; intermediate joint BatchNorm is
-  enabled, and final-output BatchNorm is disabled. The model returns logits;
-  training uses `BCEWithLogitsLoss`. `DeeperDiscriminator.probabilities`
-  converts logits to probabilities when needed.
-- Seed 42, 100 epochs, four map-style data workers, and per-epoch sample grids
-  are reproducibility/usability defaults, not reported historical settings.
-- Generator targets use 1.0 separately from the discriminator's smoothed real
-  target 0.9. Discriminator-input noise is disabled during generator updates by
-  default and can be enabled using `training.noise_on_generator_updates`.
-- `image` and `text` are starter column names only. Dataset ID, splits, columns,
-  and streaming mode must be checked/set for the selected Hugging Face dataset.
-  No dataset schema is presumed.
+### 2. Generator
+- Combines text embeddings with a 100-dimensional random noise vector.
+- Uses a fully connected projection followed by transposed convolutional upsampling.
+- Generates 64 × 64 RGB images.
+- Uses Batch Normalization and ReLU in intermediate layers, with Tanh at the output.
+- Supports optional conditioning augmentation and spatial word-level attention.
 
-The dimensional path in the default configuration is:
+### 3. Discriminator
+- Extracts visual features through convolutional layers.
+- Combines image features with the projected text embedding.
+- Learns to distinguish real matching image-caption pairs from generated and, optionally, mismatched pairs.
+- Produces logits for adversarial training using `BCEWithLogitsLoss`.
+
+### 4. Optional CLIP Guidance
+- Uses a pretrained CLIP ViT-B/32 model as a frozen semantic guidance network.
+- Computes image-text contrastive alignment loss during training when enabled.
+- Keeps CLIP parameters frozen while allowing gradients to flow through the image encoder into the generator.
+
+### 5. Evaluation
+- Calculates cosine similarity between generated-image and caption embeddings using CLIP.
+- Records generator and discriminator losses.
+- Supports training-loss plots and evaluation reports.
+
+## Dataset
+
+The project uses the Hugging Face `text-to-image-2M` dataset, stored in WebDataset TAR shards.
+
+Dataset: https://huggingface.co/datasets/jackyhate/text-to-image-2M
+
+The experiment uses a selected subset rather than downloading the complete dataset:
+
+| Split | Number of examples |
+|---|---:|
+| Training | 10,000 |
+| Testing | 2,000 |
+| Total | 12,000 |
+
+Images are decoded, converted to RGB, resized to 64 × 64, converted to tensors, and normalized to the range [-1, 1].
+
+The data pipeline supports streaming shard access, deterministic buffered sampling, local caching of the selected subset, sample identity tracking, and checks for duplicate images across the training and test partitions.
+
+**Note:** The subset is selected from a shuffled stream across the configured shards; it should not be interpreted as a uniformly random sample of the entire two-million-example dataset. The full dataset is not included in this repository.
+
+## Training
+
+The training pipeline includes:
+
+- Separate generator and discriminator optimization.
+- Two generator updates per discriminator update by default.
+- Adam optimizers with configurable learning rates and beta values.
+- One-sided label smoothing for real discriminator examples.
+- Optional mismatched-caption negatives.
+- Optional image noise during discriminator training.
+- Optional conditioning-augmentation regularization.
+- Optional CLIP alignment loss.
+- Gradient clipping and finite-value checks.
+- Learning-rate scheduling.
+- Periodic checkpoints and generated sample grids.
+- Checkpoint resumption with saved model, optimizer, scheduler, and random-number-generator states.
+
+## Repository Structure
 
 ```text
-Text: BERT pooler (B x 768) -> sentence projection (B x 256)
-Token path: BERT hidden states (B x L x 768) -> projection (B x L x 256)
-Generator input: text (B x 256) + noise (B x 100) -> FC (B x 8192)
-  -> 512 x 4 x 4 -> 256 x 8 x 8 -> 128 x 16 x 16
-  -> 64 x 32 x 32 -> 3 x 64 x 64
-Word attention: token features are fused at 4x4, 8x8, 16x16, and 32x32.
-Discriminator image: 3 x 64 x 64 -> 64 x 32 x 32 -> 128 x 16 x 16
-  -> 256 x 8 x 8 -> 512 x 4 x 4
-Joint head: image 512 x 4 x 4 + text 256 x 4 x 4 -> 768 x 4 x 4
-  -> 512 x 4 x 4 -> 1 x 1 x 1 raw logit
+Text_to_Image_Synthesis_Using_cGAN_and_BERT/
+│
+├── README.md
+├── config.yaml
+├── pyproject.toml
+├── requirements.txt
+├── train.py
+├── generate.py
+├── evaluate.py
+│
+├── src/
+│   └── text_to_image_gan/
+│       ├── __init__.py
+│       ├── alignment.py
+│       ├── data.py
+│       ├── evaluation.py
+│       ├── inference.py
+│       ├── training.py
+│       ├── utils.py
+│       │
+│       └── models/
+│           ├── __init__.py
+│           ├── text_encoder.py
+│           ├── generator.py
+│           └── discriminator.py
+│
+└── tests/
+    ├── test_models.py
+    └── test_training_finite_guards.py
 ```
 
-## Setup
+## Installation
 
-Use Python 3.10 or newer in a virtual environment. Install the project and test
-dependencies with:
+Clone the repository:
 
 ```bash
-python -m pip install -r requirements.txt
+git clone https://github.com/jahnavireddy-27/Text_to_Image_Synthesis_Using_cGAN_and_BERT.git
+cd Text_to_Image_Synthesis_Using_cGAN_and_BERT
 ```
 
-The active dataset is `kaiyuyue/oxford-flowers-102-captions`, loaded from
-Hugging Face Datasets. Its `train` split contains 7,169 image-caption records
-and its `val` split contains 1,020. The images are Oxford Flowers 102; each has
-20 machine-written captions generated with Qwen2.5-VL. The captions range from
-short phrases to detailed descriptions. The configuration samples from the
-detailed half on each access so the generator sees varied descriptions over
-training. The captions are CC0; the images retain the original Oxford dataset
-terms. The image and caption fields are `image` and `captions`, with `image_id`
-as the sample identifier. [Dataset card](https://huggingface.co/datasets/kaiyuyue/oxford-flowers-102-captions)
+Create and activate a virtual environment:
 
-The current configuration uses all 7,169 training images and the 1,020-image
-validation split as the held-out evaluation set. Hugging Face Datasets caches
-its downloaded files under `data.cache_dir` (`outputs/flowers/dataset_cache`).
-The train and validation splits are distinct in the dataset source, with one
-identical image explicitly allowed by `data.allow_identical_images`. Images
-are resized directly to square 64 x 64 and normalized to [-1, 1].
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
 
-The active configuration uses only the flower dataset. Generated training
-artifacts and downloaded dataset caches are kept out of the source bundle; the
-Colab notebook includes the current code for a fresh GPU run.
+Install dependencies:
 
-## Run
+```bash
+pip install --upgrade pip
+pip install -e ".[dev]"
+```
 
-Train with the flower-only configuration:
+The first run may download pretrained BERT and CLIP model weights from Hugging Face.
+
+## Configuration
+
+Model architecture, dataset settings, training hyperparameters, evaluation settings, and output paths are configured in `config.yaml`.
+
+Important configurable parameters include:
+
+- Image resolution and dataset subset sizes.
+- BERT model and text embedding dimensions.
+- Generator and discriminator channel configurations.
+- Noise-vector dimensions.
+- Generator and discriminator learning rates.
+- Batch size and number of epochs.
+- Conditioning augmentation and word-level attention.
+- Optional CLIP alignment weight.
+- Checkpoint and sample-output locations.
+
+## Running the Project
+
+### Train
 
 ```bash
 python train.py --config config.yaml
 ```
 
-Training saves the complete YAML configuration in the checkpoint directory and
-alongside each checkpoint. Checkpoints include all three model states, both
-optimizer and scheduler states, epoch/loss history, and Python/NumPy/PyTorch
-random-number-generator states. Resume by setting `training.resume_from` to a
-checkpoint path in `config.yaml`. Resume rejects configuration differences by
-default; only an increased epoch target and changed `paths.*` destinations are
-allowed. Each allowed difference is printed. A checkpoint is saved at the final
-completed epoch even if that epoch is not an interval multiple.
+To explicitly select a device:
 
-Generate one image for a caption:
+```bash
+python train.py --config config.yaml --device mps
+```
+
+Other supported device choices depend on the installed PyTorch environment, including `cpu` and `cuda`.
+
+### Generate Images
+
+After training and saving a checkpoint:
 
 ```bash
 python generate.py \
-  --checkpoint checkpoints/checkpoint_epoch_0005.pt \
-  --caption "A small bird perched on a branch"
+  --checkpoint outputs/checkpoints/checkpoint_epoch_0020.pt \
+  --captions "A red bird sitting on a tree branch" \
+              "A small dog running through a green field" \
+  --output-dir outputs/generated \
+  --images-per-caption 2
 ```
 
-Evaluate generated images against the held-out test captions with CLIP:
+### Evaluate
 
 ```bash
-python evaluate.py --checkpoint checkpoints/checkpoint_epoch_0005.pt
+python evaluate.py --help
 ```
 
-Training writes periodic image grids under
-`outputs/flowers/word_attention_clip/samples/` and a loss plot to
-`outputs/flowers/word_attention_clip/training_losses.png`. Evaluation writes the measured average
-generated-image/text cosine similarity to `outputs/clip_evaluation.json`.
-CLIP's 0.2556 historical report value is included in that JSON as a reference
-only; it is not used to pass/fail evaluation. Evaluation noise is seeded by
-`evaluation.seed`, and the JSON records the CLIP model/processor identifiers,
-effective image preprocessing settings, tokenizer settings, test split, and
-similarity metric.
+Use the available evaluation arguments to load a checkpoint and evaluate generated image-caption pairs.
 
-With `training.clip_alignment_weight` above zero, each generator update also
-downloads/uses the configured frozen CLIP teacher and logs its contrastive loss
-as `CLIP` in the epoch output. The first run therefore downloads both BERT and
-CLIP weights. Checkpoints from the earlier sentence-only generator cannot be
-resumed into the word-attention architecture; this experiment starts a fresh
-checkpoint series.
-
-## Tests
-
-Run the CPU-friendly synthetic forward-pass and configuration tests with:
+### Run Tests
 
 ```bash
-python -m pytest
+pytest
 ```
 
-The text-encoder test injects a mock tokenizer and BERT module, verifies frozen
-BERT weights and the trainable projection, and does not download pretrained
-weights. The model tests use synthetic tensors. No training or dataset download
-is started by the tests.
-=======
-# Text_to_Image_Synthesis_Using_cGAN_and_BERT
->>>>>>> daaf6f1dcf2d70d80b58c64862fd97c1c22cd09c
+## Reproducibility and Limitations
+
+- Random seeds and dataset-selection metadata are recorded to support reproducibility.
+- Checkpoints preserve model and optimizer states for resuming training.
+- Exact stochastic resumption may vary across hardware backends.
+- CLIP alignment and attention mechanisms are configurable rather than mandatory.
+- CLIP cosine similarity measures semantic image-text alignment; it is not a direct measure of visual realism.
+- The repository provides the implementation and training pipeline. It does not include pretrained project checkpoints, downloaded datasets, or generated output images.
+- Image-generation quality depends on training configuration, compute resources, and optimization stability. The implementation should not be interpreted as a guarantee of photorealistic output.
+
+## Technologies
+
+- Python
+- PyTorch
+- Hugging Face Transformers
+- Hugging Face Datasets
+- BERT
+- Conditional Generative Adversarial Networks
+- Convolutional Neural Networks
+- CLIP
+- NumPy
+- Pillow
+- Matplotlib
+- PyYAML
+
+## Acknowledgements
+
+The dataset is provided by its contributors through Hugging Face. This project uses pretrained BERT and CLIP models from the Hugging Face ecosystem.
+
